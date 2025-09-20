@@ -1,10 +1,18 @@
-import openmeteo_requests
+# ------------------ #
+# Importing Packages #
+# ------------------ #
 
+import openmeteo_requests
 import pandas as pd
+import plotly.express as px
+import seaborn as sns
 import requests_cache
 from retry_requests import retry
+import streamlit as st
 
-#This is a big test
+# --------------- #
+# Open-meteo API  #
+# --------------- #
 
 # Setup the Open-Meteo API client with cache and retry on error
 cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
@@ -51,3 +59,31 @@ hourly_data["precipitation"] = hourly_precipitation
 
 hourly_dataframe = pd.DataFrame(data = hourly_data)
 print("\nHourly data\n", hourly_dataframe)
+
+# ---------------------------------------- End
+
+# --------------- #
+#     Figures     #
+# --------------- #
+
+#Figure code here
+
+# ---------------------------------------- End
+
+# --------------- #
+#    Streamlit    #
+# --------------- #
+
+st.title("KNMI Weerdata")
+# Sidebar inputs
+st.sidebar.header("Location & Settings")
+latitude = st.sidebar.number_input("Latitude", value=52.52, format="%.4f")
+longitude = st.sidebar.number_input("Longitude", value=13.41, format="%.4f")
+timezone = st.sidebar.text_input("Timezone", "Europe/Berlin")
+
+st.dataframe(hourly_dataframe)
+
+st.write("This is a test")
+st.write("GODOOODOAOGAGOA")
+
+# ---------------------------------------- End
