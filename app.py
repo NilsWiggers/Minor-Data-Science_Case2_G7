@@ -2,6 +2,8 @@ import streamlit as st
 import requests
 import pandas as pd
 from datetime import datetime
+import locale
+from datetime import date, timedelta
 
 # -----------------------
 # Functies
@@ -50,7 +52,6 @@ if zoekterm:
         if keuze:
             gekozen = next(r for r in resultaten if r["display_name"] == keuze)
             lat, lon = float(gekozen["lat"]), float(gekozen["lon"])
-            st.subheader(f"📍 {gekozen['display_name']}")
 
             # -----------------------
             # Open-Meteo ophalen en cachen
@@ -141,23 +142,40 @@ if zoekterm:
                     </iframe>
                 </div>
                 """
+                locale.setlocale(locale.LC_TIME, "nl_NL.UTF-8")
+                vandaag = date.today()
+                
                 st.markdown(iframe_code, unsafe_allow_html=True)
-                st.divider()
+                st.write('')
+                st.subheader(f"{gekozen['display_name']}")
+                st.write(vandaag.strftime("%A %d %B"))
+                
 
-                # --- Actueel uur metrics ---
-                if not df_hourly.empty:
-                    nu = datetime.now()
-                    df_hourly["verschil"] = abs(df_hourly["Tijd"] - nu)
-                    huidig_idx = df_hourly["verschil"].idxmin()
-                    huidig = df_hourly.loc[huidig_idx]
+                # --- Actueel uur metrics ---            
+                nu = datetime.now()
+                df_hourly["verschil"] = abs(df_hourly["Tijd"] - nu)
+                huidig_idx = df_hourly["verschil"].idxmin()
+                huidig = df_hourly.loc[huidig_idx]
 
-                    col1, col2, col3, col4, col5 = st.columns(5)
-                    col1.metric("Weer", huidig["Weer"])
-                    col2.metric("Temperatuur", f"{huidig['Temperatuur (°C)']} °C")
-                    col3.metric("Regen", f"{huidig['Neerslag (mm)']} mm")
-                    col4.metric("Wind snelheid", f"{huidig['Wind snelheid (km/h)']} km/h")
-                    col5.metric("Wind richting", huidig["Wind richting"])
 
+                col1, col2, col3, col4, col5 = st.columns(5)
+                col1.metric("Weer", huidig["Weer"])
+                col2.metric("Temperatuur", f"{huidig['Temperatuur (°C)']} °C")
+                col3.metric("Regen", f"{huidig['Neerslag (mm)']} mm")
+                col4.metric("Wind snelheid", f"{huidig['Wind snelheid (km/h)']} km/h")
+                col5.metric("Wind richting", huidig["Wind richting"])
+
+                
+                st.header("Weekoverzicht:")
+                cols = st.columns(7)
+
+                for i in range(7):
+                    dag = vandaag + timedelta(days=i+1)
+                    with cols[i]:
+                        st.metric(label= dag.strftime("%A %d %B"),value=str(df_daily["Weer"].iloc[i]))
+                        st.header(str(df_daily['Temp max (°C)'].iloc[i])+'°')
+                        st.subheader(str(df_daily['Temp min (°C)'].iloc[i])+'°')
+                
             # -----------------------
             # Pagina: Info
             # -----------------------
