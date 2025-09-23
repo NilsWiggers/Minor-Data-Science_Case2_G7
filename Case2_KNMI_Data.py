@@ -71,9 +71,6 @@ print("\nHourly data\n", hourly_dataframe)
 
 # ---------------------------------------- End
 
-import streamlit as st
-import pandas as pd
-import requests
 
 st.title("Actuele 7-daagse weersvoorspelling")
 
@@ -87,7 +84,7 @@ params = {
     "timezone": "Europe/Amsterdam"
 }
 
-# Data ophalen van Open-Meteo
+# Data ophalen van Open-Meteo via URL
 response = requests.get(url, params=params)
 data = response.json()
 
