@@ -296,50 +296,98 @@ df_fig2["Local Time"] = df_fig2["Local Time"].dt.strftime("%H:%M")
 df_fig2_useddata = df_fig2[["date","Local Time","temperature_2m","rain"]]
 print(df_fig2)
 
+#Streamlit optionbox
+fig2_option = st.radio(
+    "**Selecteer:**", ("Dataframe", "24h Weersvoorspelling")
+)
+
+if fig2_option == "Dataframe":
+    show_temp = False
+    show_rain = False
+    show_wind = False
+    st.dataframe(df_fig2_useddata)
+
+else:
+    st.write("**Enable/Disable options**")
+    show_temp = st.checkbox("Show Temperature", value=True)
+    show_rain = st.checkbox("Show Rain", value=False)
+    show_wind = st.checkbox("Show Wind", value=False)
+    
+
+
 #Create figure 2 with plotly. It is a line graph showing temperature and the next 24h
 fig2 = go.Figure()
 
-fig2.add_trace(go.Scatter( 
-    x=df_fig2["Local Time"], 
-    y=df_fig2["temperature_2m"],
-    mode = 'lines+markers',
-    line=dict(color='rgba(230, 93, 32, 0.761)'), #Orange
-    fill='tozeroy',
-    fillcolor='rgba(201, 90, 41, 0.49)',
-    name = "Temperature (°C)",
-    yaxis="y1",
-    hovertemplate="<b>Temperatuur:</b> %{y} °C<br><extra></extra>"
+if show_temp:
+    fig2.add_trace(go.Scatter( 
+        x=df_fig2["Local Time"], 
+        y=df_fig2["temperature_2m"],
+        mode = 'lines+markers',
+        line=dict(color='rgba(230, 93, 32, 0.761)'), #Oranje
+        fill='tozeroy',
+        fillcolor='rgba(201, 90, 41, 0.49)',
+        name = "Temperature (°C)",
+        yaxis="y1",
+        hovertemplate="<b>Temperatuur:</b> %{y} °C<br><extra></extra>"
     ))
 
-fig2.add_trace(go.Scatter(
-    x=df_fig2["Local Time"], 
-    y=df_fig2["rain"],
-    mode = 'lines+markers',
-    line=dict(color='rgba(67, 147, 219, 0.5)'), #Blue
-    fill='tozeroy',
-    fillcolor='rgba(134, 61, 153, 0.2)',
-    name = "Regen (mm)",
-    yaxis="y2",
-    hovertemplate="<b>Regen:</b> %{y} mm<extra></extra>"
-))
+if show_rain:
+    fig2.add_trace(go.Scatter(
+        x=df_fig2["Local Time"], 
+        y=df_fig2["rain"],
+        mode = 'lines+markers',
+        line=dict(color='rgba(67, 147, 219, 0.5)'), #Blauw
+        fill='tozeroy',
+        fillcolor='rgba(134, 61, 153, 0.2)',
+        name = "Regen (mm)",
+        yaxis="y2",
+        hovertemplate="<b>Regen:</b> %{y} mm<extra></extra>"
+    ))
+
+if show_wind:
+    fig2.add_trace(go.Scatter(
+        x=df_fig2["Local Time"], 
+        y=df_fig2["wind_speed_10m"],
+        mode = 'lines+markers',
+        line=dict(color='rgba(155, 52, 201, 0.5)'), #Paars
+        fill='tozeroy',
+        fillcolor='rgba(154, 66, 194, 0.2)',
+        name = "Wind Snelheid (km/h)",
+        yaxis="y3",
+        hovertemplate="<b>Wind Snelheid:</b> %{y} km/h<extra></extra>"
+    ))    
 
 fig2.update_layout(
     title="Weersvoorspelling 24h",
     xaxis_title="Lokale Tijd",
-    yaxis_title="Temperatuur °C",
-    yaxis2=dict(title="Regen (mm)", side='right', overlaying='y'),
+    xaxis=dict(domain=[0.0,0.85]),
+    yaxis=dict(title="Temperatuur (°C)", range=[0, df_fig2["temperature_2m"].max()+10]),
+    yaxis2=dict(title="Regen (mm)", side='right', overlaying='y', range=[0, df_fig2["rain"].max()+2]),
+    yaxis3=dict(title="Wind Snelheid (km/h)", side='right', overlaying='y', position=0.98, range=[0, df_fig2["wind_speed_10m"].max()+5]),
     hovermode='x unified',
     hoverlabel=dict(
-        bgcolor="lightblue",
         font_size=14,
         font_family="Arial",
         font_color="black",
-        bordercolor="blue",
-        
+        bgcolor="rgba(255, 255, 255, 0.82)",
+        bordercolor="rgba(0, 0, 0, 0)",  
     ),
     hoverdistance=100,
     spikedistance=100
 )
+
+if show_temp == False:
+    if show_wind == False:
+        fig2.update_layout(yaxis2=dict(showgrid=True))
+    elif (show_rain and show_wind) == True:
+        fig2.update_layout(yaxis2=dict(showgrid=True)) 
+        fig2.update_layout(yaxis3=dict(showgrid=False)) 
+    else:
+        fig2.update_layout(yaxis3=dict(showgrid=True, position=0.87)) 
+else:
+    fig2.update_layout(yaxis1=dict(showgrid=True))
+    fig2.update_layout(yaxis2=dict(showgrid=False))
+    fig2.update_layout(yaxis3=dict(showgrid=False))
 
 fig2.update_xaxes(
     showspikes=True, 
@@ -350,21 +398,8 @@ fig2.update_xaxes(
     spikedash='solid'
     )  
 
-# Min/Max instellen voor marge boven en onder de visualisatie
-y_min = df_fig2["temperature_2m"].min() - 10  # 10 units onder
-y_max = df_fig2["temperature_2m"].max() + 10  # 10 units boven
-
-fig2.update_yaxes(range=[y_min, y_max])
-
-#Streamlit selectbox
-fig2_option = st.radio(
-    "**Selecteer:**", ("Dataframe", "24h Weersvoorspelling")
-)
-
-if fig2_option == "Dataframe":
-    st.dataframe(df_fig2_useddata)
-else:
-    st.plotly_chart(fig2)
+if fig2_option == "24h Weersvoorspelling":
+    st.plotly_chart(fig2, use_container_width=True)
 
 #endregion
 
