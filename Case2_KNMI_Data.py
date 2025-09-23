@@ -9,6 +9,7 @@ import seaborn as sns
 import requests_cache
 from retry_requests import retry
 import streamlit as st
+import requests
 
 # --------------- #
 # Open-meteo API  #
@@ -70,9 +71,59 @@ print("\nHourly data\n", hourly_dataframe)
 
 # ---------------------------------------- End
 
-# --------------- #
-#    Streamlit    #
-# --------------- #
+import streamlit as st
+import pandas as pd
+import requests
+
+st.title("Actuele 7-daagse weersvoorspelling")
+
+
+
+# Parameters (voorbeeld: Amsterdam, 52.37N, 4.89E)
+params = {
+    "latitude": 52.37,
+    "longitude": 4.89,
+    "daily": "temperature_2m_min,temperature_2m_max,precipitation_sum",
+    "timezone": "Europe/Amsterdam"
+}
+
+# Data ophalen van Open-Meteo
+response = requests.get(url, params=params)
+data = response.json()
+
+# Data in DataFrame zetten
+df = pd.DataFrame({
+    "Datum": data["daily"]["time"],
+    "MinTemp (°C)": data["daily"]["temperature_2m_min"],
+    "MaxTemp (°C)": data["daily"]["temperature_2m_max"],
+    "Neerslag (mm)": data["daily"]["precipitation_sum"]
+})
+
+# Checkboxen voor selectie
+show_temp = st.checkbox("Toon temperatuur", value=True)
+show_rain = st.checkbox("Toon neerslag", value=False)
+
+# Tabel
+st.subheader("Tabel")
+cols = ["Datum"]
+if show_temp:
+    cols += ["MinTemp (°C)", "MaxTemp (°C)"]
+if show_rain:
+    cols += ["Neerslag (mm)"]
+
+st.dataframe(df[cols])
+
+# Grafiek
+st.subheader("Grafiek")
+if show_temp and show_rain:
+    st.line_chart(df.set_index("Datum")[["MinTemp (°C)", "MaxTemp (°C)", "Neerslag (mm)"]])
+elif show_temp:
+    st.line_chart(df.set_index("Datum")[["MinTemp (°C)", "MaxTemp (°C)"]])
+elif show_rain:
+    st.line_chart(df.set_index("Datum")[["Neerslag (mm)"]])
+else:
+    st.info("Selecteer minimaal één optie om te plotten.")
+
 
 st.title("KNMI Weerdata")
 # Sidebar inputs
