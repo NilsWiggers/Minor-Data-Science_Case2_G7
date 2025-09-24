@@ -116,13 +116,13 @@ def embed_windy(lat, lon, overlay):
 # -----------------------
 # Pagina setup
 # -----------------------
-st.title("KNMI Weerdata")
+st.title("Open-Meteo Weerdata")
 with st.sidebar:
     pagina = option_menu(
         menu_title = None,
         options=["Het Weer", "Back-end Data"],
         menu_icon = "cast",
-        icons=["house", "book"]
+        icons=["sun", "database"]
     )
 
 zoekterm = st.text_input("Typ een plaatsnaam:")
@@ -347,11 +347,13 @@ if pagina == "Het Weer":
 
 
 if pagina == "Back-end Data":
-    with st.expander("📊 10-daagse weersverwachting", expanded=True):
-        if not df_daily.empty: st.dataframe(df_daily)
-    with st.expander("📈 Uurverwachting (10 dagen)"):
-        if not df_hourly.empty: st.dataframe(df_hourly)
-
+    if zoekterm:
+        with st.expander("📊 10-daagse weersverwachting", expanded=True):
+            if not df_daily.empty: st.dataframe(df_daily)
+        with st.expander("📈 Uurverwachting (10 dagen)"):
+            if not df_hourly.empty: st.dataframe(df_hourly)
+    else:
+        st.write("Typ eerst een plaatsnaam!")
 #endregion
 
 # region ----- Figuur 2: 24h Weersvoorspelling (Temp & Regen)
@@ -368,22 +370,19 @@ if pagina == "Het Weer":
 
 
             #Definieer huidige tijd en de tijd 24 uur vooruit.
+
             now = pd.Timestamp.now(tz="Europe/Amsterdam")
-            print(now)
             next_24 = now + pd.Timedelta(hours=24)
 
-            #Filter op tussen de huidige tijd en de volgende 24h en convert datetime naar alleen uren en minuten
+            # Filter aankomende 24h
             df_fig2 = df_fig2[(df_fig2["Local Time"] >= now) & (df_fig2["Local Time"] <= next_24)]
-            df_fig2["Local Time"] = df_fig2["Local Time"].dt.strftime("%H:%M") 
 
-            #print de nieuwe dataframe en zet het in streamlit
-            df_fig2_useddata = df_fig2[["date","Local Time","temperature_2m","rain"]]
-            print(df_fig2)
-
-            #Streamlit optionbox
+            # Streamlit optionbox
             fig2_option = st.radio(
-                "**Selecteer:**", ("24h Weersvoorspelling","Dataframe")
+                "**Selecteer:**", ("24h Weersvoorspelling", "Dataframe")
             )
+
+            df_fig2_useddata = df_fig2[["date", "Local Time", "temperature_2m", "rain"]]
 
             if fig2_option == "Dataframe":
                 show_temp = False
@@ -397,6 +396,27 @@ if pagina == "Het Weer":
                 show_rain = st.checkbox("Show Rain", value=False)
                 show_wind = st.checkbox("Show Wind", value=False)
                 
+            today = now.date()
+            df_fig2 = df_fig2.copy()
+            df_fig2 = df_fig2.sort_values("Local Time").reset_index(drop=True)
+
+            # Split uren vandaag en morgen (voor de slider)
+            hours_today = df_fig2[df_fig2["Local Time"] >= now]
+            hours_tomorrow = df_fig2[df_fig2["Local Time"] < now].copy()
+            hours_tomorrow["Local Time"] += pd.Timedelta(days=1)
+            future_hours = pd.concat([hours_today, hours_tomorrow]).reset_index(drop=True)
+
+            # Streamlit slider
+            if fig2_option == "24h Weersvoorspelling":
+                hour_index = st.select_slider(
+                    "**Selecteer het uur**",
+                    options=future_hours.index,
+                    format_func=lambda x: future_hours.loc[x, "Local Time"].strftime("%H:%M")
+                    )
+                row = future_hours.loc[hour_index]
+            else:
+                row = future_hours.loc[0]     
+
             #Figuur 2 maken met plotly. Het is een lijngrafiek die de temperatuur, wind en regen laat zien in de komende 24 uur
             fig2 = go.Figure()
 
@@ -404,58 +424,46 @@ if pagina == "Het Weer":
                 fig2.add_trace(go.Scatter( 
                     x=df_fig2["Local Time"], 
                     y=df_fig2["temperature_2m"],
-                    mode = 'lines+markers',
-                    line=dict(color='rgba(230, 93, 32, 0.761)'), #Oranje
+                    mode='lines+markers',
+                    line=dict(color='rgba(230, 93, 32, 0.761)'),
                     fill='tozeroy',
                     fillcolor='rgba(201, 90, 41, 0.49)',
-                    name = "Temperature (°C)",
-                    yaxis="y1",
-                    hovertemplate="<b>Temperatuur:</b> %{y} °C<br><extra></extra>"
+                    name="Temperature (°C)",
+                    yaxis="y1"
                 ))
 
             if show_rain:
                 fig2.add_trace(go.Scatter(
                     x=df_fig2["Local Time"], 
                     y=df_fig2["rain"],
-                    mode = 'lines+markers',
-                    line=dict(color='rgba(67, 147, 219, 0.5)'), #Blauw
+                    mode='lines+markers',
+                    line=dict(color='rgba(67, 147, 219, 0.5)'),
                     fill='tozeroy',
                     fillcolor='rgba(134, 61, 153, 0.2)',
-                    name = "Regen (mm)",
-                    yaxis="y2",
-                    hovertemplate="<b>Regen:</b> %{y} mm<extra></extra>"
+                    name="Regen (mm)",
+                    yaxis="y2"
                 ))
 
             if show_wind:
                 fig2.add_trace(go.Scatter(
                     x=df_fig2["Local Time"], 
                     y=df_fig2["wind_speed_10m"],
-                    mode = 'lines+markers',
-                    line=dict(color='rgba(155, 52, 201, 0.5)'), #Paars
+                    mode='lines+markers',
+                    line=dict(color='rgba(155, 52, 201, 0.5)'),
                     fill='tozeroy',
                     fillcolor='rgba(154, 66, 194, 0.2)',
-                    name = "Wind Snelheid (km/h)",
-                    yaxis="y3",
-                    hovertemplate="<b>Wind Snelheid:</b> %{y} km/h<extra></extra>"
-                ))    
+                    name="Wind Snelheid (km/h)",
+                    yaxis="y3"
+                ))
 
             fig2.update_layout(
                 title="Weersvoorspelling 24h",
                 xaxis_title="Lokale Tijd",
-                xaxis=dict(domain=[0.0,0.85]),
-                yaxis=dict(title="Temperatuur (°C)", range=[0, df_fig2["temperature_2m"].max()+10]),
+                xaxis=dict(domain=[0.0, 0.85]),
+                yaxis=dict(title="Temperatuur (°C)", range=[0, df_fig2["temperature_2m"].max()+20]),
                 yaxis2=dict(title="Regen (mm)", side='right', overlaying='y', range=[0, df_fig2["rain"].max()+2]),
-                yaxis3=dict(title="Wind Snelheid (km/h)", side='right', overlaying='y', position=0.98, range=[0, df_fig2["wind_speed_10m"].max()+5]),
-                hovermode='x unified',
-                hoverlabel=dict(
-                    font_size=14,
-                    font_family="Arial",
-                    font_color="black",
-                    bgcolor="rgba(255, 255, 255, 0.82)",
-                    bordercolor="rgba(0, 0, 0, 0)",  
-                ),
-                hoverdistance=100,
-                spikedistance=100
+                yaxis3=dict(title="Wind Snelheid (km/h)", side='right', overlaying='y', position=0.98, range=[0, df_fig2["wind_speed_10m"].max()+15]),
+                hovermode=False,  # Disable hover because slider controls info
             )
 
             if show_temp == False:
@@ -478,13 +486,43 @@ if pagina == "Het Weer":
                 spikesnap="data",
                 spikethickness=2,
                 spikedash='solid'
-                )  
+            )  
 
+            # --- ADD vertical line and annotation dynamically AFTER slider selection ---
+            fig2.add_vline(
+                x=row["Local Time"],
+                line_width=2,
+                line_dash="dash",
+                line_color="grey"
+            )
+            
+            # Annotatie box met informatie over de geselecteerde tijd
+            info_text = f"<b>{row['Local Time'].strftime('%H:%M')}</b><br>"
+            if show_temp:
+                info_text += f"🌡️ Temp: {row['temperature_2m']:.1f} °C<br>"
+            if show_rain:
+                info_text += f"🌧️ Rain: {row['rain']:.1f} mm<br>"
+            if show_wind:
+                info_text += f"💨 Wind: {row['wind_speed_10m']:.0f} km/h"
+
+            fig2.add_annotation(
+                x=row["Local Time"],
+                y=max(
+                    row["temperature_2m"] if show_temp else 0,
+                    row["rain"] if show_rain else 0,
+                    row["wind_speed_10m"] if show_wind else 0
+                ) + 5,
+                text=info_text,
+                showarrow=False,
+                align="left",
+                bgcolor="rgba(255,255,255,0.8)",
+                bordercolor="black"
+            )
+
+            # Show figure
             if fig2_option == "24h Weersvoorspelling":
                 st.plotly_chart(fig2, use_container_width=True)
-
     
 #endregion
 
 # ---------------------------------------- End
-
