@@ -313,9 +313,7 @@ else:
     show_rain = st.checkbox("Show Rain", value=False)
     show_wind = st.checkbox("Show Wind", value=False)
     
-
-
-#Create figure 2 with plotly. It is a line graph showing temperature and the next 24h
+#Figuur 2 maken met plotly. Het is een lijngrafiek die de temperatuur, wind en regen laat zien in de komende 24 uur
 fig2 = go.Figure()
 
 if show_temp:
