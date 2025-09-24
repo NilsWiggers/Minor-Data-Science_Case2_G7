@@ -126,13 +126,10 @@ st.title("KNMI Weerdata")
 # Sidebar inputs
 st.sidebar.header("Location & Settings")
 latitude = st.sidebar.number_input("Latitude", value=52.52, format="%.4f")
-longitude = st.sidebar.number_input("Longitude", value=13.41, format="%.4f")
-timezone = st.sidebar.text_input("Timezone", "Europe/Berlin")
+longitude = st.sidebar.number_input("Longitude", value=4.89, format="%.4f")
+timezone = st.sidebar.text_input("Timezone", "Europe/Amsterdam")
 
 st.dataframe(hourly_dataframe)
 
-st.write("This is a test")
-st.write("GODOOODOAOGAGOA")
-st.write("KABUNGA")
 
 # ---------------------------------------- End
