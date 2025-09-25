@@ -4,3 +4,10 @@ pandas==2.2.2
 torch==2.8.0
 torchvision==0.23.0
 tqdm==4.66.4
+openmeteo_requests
+plotly.express
+plotly.graph_objects
+seaborn
+locale
+requests_cache
+streamlit
