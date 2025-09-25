@@ -6,6 +6,7 @@ import openmeteo_requests
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import seaborn as sns
 import requests
 from datetime import datetime, date, timedelta
@@ -158,8 +159,8 @@ openmeteo = openmeteo_requests.Client(session = retry_session)
 if zoekterm:
     url = "https://api.open-meteo.com/v1/forecast"
     params = {
-        "latitude": lat, #Amsterdam
-        "longitude": lon, #Amsterdam
+        "latitude": lat,
+        "longitude": lon,
         "daily": ["temperature_2m_max", "temperature_2m_min", "weather_code"],
         "hourly": ["temperature_2m", "rain", "weather_code", "wind_speed_10m", "wind_direction_10m"],
         "models": "knmi_seamless",
@@ -179,6 +180,7 @@ if zoekterm:
     hourly_weather_code = hourly.Variables(2).ValuesAsNumpy()
     hourly_wind_speed_10m = hourly.Variables(3).ValuesAsNumpy()
     hourly_wind_direction_10m = hourly.Variables(4).ValuesAsNumpy()
+    hourly_precipitation = hourly.Variables(3).ValuesAsNumpy()
 
     hourly_data = {"date": pd.date_range(
         start = pd.to_datetime(hourly.Time(), unit = "s", utc = True),
@@ -192,6 +194,7 @@ if zoekterm:
     hourly_data["weather_code"] = hourly_weather_code
     hourly_data["wind_speed_10m"] = hourly_wind_speed_10m
     hourly_data["wind_direction_10m"] = hourly_wind_direction_10m
+    hourly_data["precipitation"] = hourly_precipitation
 
     hourly_dataframe = pd.DataFrame(data = hourly_data)
     print("\nHourly data\n", hourly_dataframe)
@@ -225,19 +228,19 @@ if zoekterm:
 # region ----- Figuur 1: Het weer per gekozen locatie ----- 
 
 # -----------------------
-# Home pagina
+# Het Weer
 # -----------------------
 if pagina == "Het Weer":
     if zoekterm:
 
-        st.header("Figuur 1: Het weer per gekozen locatie")
+        st.header("Weerkaart")
 
         # Kaartlaag
         overlay = st.radio("Kies een kaartlaag:", ["Wind", "Temperatuur", "Neerslag", "Bewolking"], horizontal=True)
         st.markdown(embed_windy(lat, lon, overlay), unsafe_allow_html=True)
 
         # Multiselect voor visualisaties
-        opties = ["Huidig weer", "Uurverwachting", "10-daagse voorspelling", "Visualisatie 24h voorspelling"]
+        opties = ["Huidig weer", "Uurverwachting", "10-daagse voorspelling", "Visualisatie 24h voorspelling", "Historische Neerslag op deze datum"]
         gekozen_opties = st.multiselect("Kies welke visualisaties je wilt zien:", opties, default=None)
         st.subheader(f"{gekozen['display_name']}")
 
@@ -291,16 +294,68 @@ if pagina == "Het Weer":
         # --- Uurverwachting ---
         if "Uurverwachting" in gekozen_opties:
             with col2:
+                # --- Radiobutton voor 24/48 uur ---
                 schakelaar = st.radio("", ["Weersverwachtingen 24 uur", "Weersverwachtingen 48 uur"], horizontal=True)
                 uren = 24 if schakelaar == "Weersverwachtingen 24 uur" else 48
-
+ 
                 if not df_hourly.empty:
                     start_idx = int(nu.strftime("%H"))
                     eind_idx = start_idx + uren
-                    df_subset = df_hourly.iloc[start_idx:eind_idx][['Weer emoji', 'Temperatuur (°C)', 'Neerslag (mm)','Wind pijl','Wind richting','Wind snelheid (km/h)']]
-                    df_subset.index = [f"{(start_idx+i)%24}:00 ({(start_idx+i)//24+1})" for i in range(len(df_subset))]
-                    st.write(df_subset.T.astype(str))
-
+                    df_subset = df_hourly.iloc[start_idx:eind_idx]
+ 
+                    st.subheader(f"Het weer per uur voor de komende {uren} uur")
+ 
+                    # --- Paginering ---
+                    pagina_grootte = 8
+                    totaal_paginas = (len(df_subset) + pagina_grootte - 1) // pagina_grootte
+ 
+                    # --- Session state pagina resetten indien nodig ---
+                    if 'pagina' not in st.session_state:
+                        st.session_state.pagina = 0
+                    elif st.session_state.pagina >= totaal_paginas:
+                        st.session_state.pagina = totaal_paginas - 1
+ 
+                    # Selecteer subset voor huidige pagina
+                    begin = st.session_state.pagina * pagina_grootte
+                    eind = begin + pagina_grootte
+                    df_page = df_subset.iloc[begin:eind]
+ 
+                    # --- Toon per uur in rijtjes van 8 kolommen ---
+                    for i in range(0, len(df_page), 8):
+                        cols = st.columns(8)
+                        for j, (idx, row) in enumerate(df_page.iloc[i:i+8].iterrows()):
+                            tijd = pd.to_datetime(row["Tijd"]).strftime("%H:%M")
+                            with cols[j]:
+                                st.markdown(f"""
+                                <div style="
+                                    text-align:center;
+                                    border:1px solid #ddd;
+                                    border-radius:10px;
+                                    padding:15px;
+                                    margin:5px;
+                                    min-height:180px;
+                                ">
+                                    <h4 style="margin:5px">{tijd}</h4>
+                                    <div style="font-size:50px; margin:5px">{row['Weer emoji']}</div>
+                                    <div><b>{row['Temperatuur (°C)']}°C</b></div>
+                                    <div style="font-size:14px;">💨 {row['Wind snelheid (km/h)']} km/h</div>
+                                    <div style="font-size:14px;">{row['Wind pijl']} ({row['Wind richting']})</div>
+                                    <div style="font-size:14px;">🌧️ {row['Neerslag (mm)']} mm</div>
+                                    <div style="font-size:12px; margin-top:5px;">{row['Weer tekst']}</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+ 
+                    st.caption(f"Pagina {st.session_state.pagina + 1} van {totaal_paginas}")
+ 
+                    # --- Knoppen Vorige / Volgende ---
+                    col_prev, col_next = st.columns([1,10])
+                    with col_prev:
+                        if st.button("⬅️ Vorige") and st.session_state.pagina > 0:
+                            st.session_state.pagina -= 1
+                    with col_next:
+                        if st.button("Volgende ➡️") and st.session_state.pagina < totaal_paginas - 1:
+                            st.session_state.pagina += 1
+                   
         # --- 10-daagse voorspelling ---
         if "10-daagse voorspelling" in gekozen_opties:
             st.header("10-daagse weersverwachtingen")
@@ -345,13 +400,128 @@ if pagina == "Het Weer":
                     </div>
                     """, unsafe_allow_html=True)
 
-
+# -----------------------
+# Back-end Data Pagina
+# -----------------------
 if pagina == "Back-end Data":
     if zoekterm:
-        with st.expander("📊 10-daagse weersverwachting", expanded=True):
-            if not df_daily.empty: st.dataframe(df_daily)
-        with st.expander("📈 Uurverwachting (10 dagen)"):
-            if not df_hourly.empty: st.dataframe(df_hourly)
+        st.title("Exploratory Data Analysis - Weersverwachting")
+
+        # --- DAGELIJKSE DATA ---
+        with st.expander("10-daagse weersverwachting", expanded=True):
+            if not df_daily.empty:
+                st.subheader("Beschrijving van variabelen (dagelijks)")
+                st.markdown("""
+                - **Datum**: Datum van de voorspelling  
+                - **Temp min (°C)**: Minimale temperatuur  
+                - **Temp max (°C)**: Maximale temperatuur  
+                - **Weer emoji**: Weersvoorspelling in emojis
+                - **Weer tekst**: Weersvoorspelling in tekst                      
+                - **Zonsopkomst**: Tijd van zonsopkomst
+                - **Zonsondergang**: Tijd van zonsondergang
+                """)
+
+                st.dataframe(df_daily)
+
+                st.subheader("Samenvatting")
+                st.write(df_daily.describe())
+
+                # --- Dropdown voor visualisaties ---
+                keuze = st.selectbox(
+                    "📊 Kies een visualisatie:",
+                    ["Temperatuurtrends", "Histogram weersituaties", "Zon op/onder"]
+                )
+
+                if keuze == "Temperatuurtrends":
+                    fig = px.line(
+                        df_daily,
+                        x="Datum",
+                        y=["Temp max (°C)", "Temp min (°C)"],
+                        labels={"value": "Temperatuur (°C)", "Datum": "Datum"},
+                        title="Dagelijkse temperatuurtrends"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+                elif keuze == "Histogram weersituaties":
+                    fig_hist = px.histogram(
+                        df_daily,
+                        x="Weer tekst",
+                        title="Verdeling van weersvoorspellingen",
+                        labels={"Weer emoji": "Weertype (emoji)"}
+                    )
+                    st.plotly_chart(fig_hist, use_container_width=True)
+
+                elif keuze == "Zon op/onder":
+                    # Data voorbereiden
+                    df_daily["Zonsopkomst_dt"] = pd.to_datetime(
+                        df_daily["Datum"].astype(str) + " " + df_daily["Zonsopkomst"].astype(str)
+                    )
+                    df_daily["Zonsondergang_dt"] = pd.to_datetime(
+                        df_daily["Datum"].astype(str) + " " + df_daily["Zonsondergang"].astype(str)
+                    )
+
+                    df_sun = df_daily.melt(
+                        id_vars=["Datum"],
+                        value_vars=["Zonsopkomst_dt", "Zonsondergang_dt"],
+                        var_name="Event",
+                        value_name="Tijd"
+                    )
+
+                    fig_sun = px.line(
+                        df_sun,
+                        x="Datum",
+                        y="Tijd",
+                        color="Event",
+                        labels={"Tijd": "Tijdstip", "Datum": "Datum", "Event": "Zon positie"},
+                        title="Zonsopkomst en Zonsondergang per dag"
+                    )
+                    st.plotly_chart(fig_sun, use_container_width=True)
+
+
+        # --- UURDATA ---
+        with st.expander("Uurverwachting (10 dagen)", expanded=False):
+            if not df_hourly.empty:
+                st.subheader("Beschrijving van variabelen (per uur)")
+                st.markdown("""
+                - **Tijd**: Datum + tijdstip van de voorspelling  
+                - **Temperatuur (°C)**: Temperatuur                  
+                - **Neerslag (mm)**: Neerslag
+                - **Weer emoji**: Weersvoorspelling in emojis  
+                - **Weer tekst**: Weersvoorspelling in tekst 
+                - **Wind snelheid (km/h)**: Windsnelheid  
+                - **Wind richting**: Richting van de wind
+                - **Wind pijl**: Richting van de wind met pijlen            
+                """)
+
+                st.dataframe(df_hourly)
+
+                st.subheader("Samenvatting")
+                st.write(df_hourly.describe())
+
+                # --- Uurvariabelen visualiseren ---
+                st.subheader("Visualisaties")
+                variable = st.selectbox(
+                    "Kies variabele om te plotten:",
+                    ["Temperatuur (°C)", "Wind richting", "Neerslag (mm)", "Wind snelheid (km/h)","Histogram weersituaties"]
+                )
+
+                if variable == "Histogram weersituaties":
+                    fig_hist = px.histogram(
+                        df_hourly,
+                        x="Weer tekst",
+                        title="Verdeling van weersvoorspellingen",
+                        labels={"Weer emoji": "Weertype (emoji)"}
+                    )
+                    st.plotly_chart(fig_hist, use_container_width=True)
+                else:
+                    fig2 = px.line(
+                        df_hourly,
+                        x="Tijd",
+                        y=variable,
+                        labels={"Tijd": "Datum + Tijd", variable: variable},
+                        title=f"Uurtrend van {variable}"
+                    )
+                    st.plotly_chart(fig2, use_container_width=True)
     else:
         st.write("Typ eerst een plaatsnaam!")
 #endregion
@@ -360,7 +530,7 @@ if pagina == "Back-end Data":
 if pagina == "Het Weer":
     if zoekterm:
         if "Visualisatie 24h voorspelling" in gekozen_opties:
-            st.header("Figuur 2: 24h Weersvoorspelling")
+            st.header("24h Weersvoorspelling")
 
             df_fig2 = hourly_dataframe.copy()
 
@@ -379,7 +549,7 @@ if pagina == "Het Weer":
 
             # Streamlit optionbox
             fig2_option = st.radio(
-                "**Selecteer:**", ("24h Weersvoorspelling", "Dataframe")
+                "**Selecteer Data Weergave:**", ("24h Weersvoorspelling", "Dataframe")
             )
 
             df_fig2_useddata = df_fig2[["date", "Local Time", "temperature_2m", "rain"]]
@@ -391,7 +561,7 @@ if pagina == "Het Weer":
                 st.dataframe(df_fig2_useddata)
 
             else:
-                st.write("**Enable/Disable options**")
+                st.write("**Kies opties**")
                 show_temp = st.checkbox("Show Temperature", value=True)
                 show_rain = st.checkbox("Show Rain", value=False)
                 show_wind = st.checkbox("Show Wind", value=False)
@@ -525,4 +695,161 @@ if pagina == "Het Weer":
     
 #endregion
 
+# region ----- Figuur 3: Historische Neerslag
+if pagina == "Het Weer":
+    if zoekterm:
+        if "Historische Neerslag op deze datum" in gekozen_opties:
+            st.header(f"Historische Neerslag op {vandaag.strftime("%d %B")}")
+            # Convert 'vandaag' from yyyy-mm-dd to mm-dd format
+            vandaag_mmdd = datetime.now().strftime("%m-%d")
+            jaar = vandaag.year
+            print("vandaag: "+vandaag_mmdd)
+
+
+            #local rainfall data "schellingwoude"
+            neerslag_df = pd.read_csv("./CSV_SCHELLINGWOUDE.csv", sep=";")
+            neerslag_df["Datum"] = pd.to_datetime(neerslag_df["Datum"], format = "%Y%m%d")
+            neerslag_df = neerslag_df.rename(columns={"Column2":"Neerslag"})
+            neerslag_df.set_index("Datum", inplace=True)
+            neerslag_df = neerslag_df[neerslag_df.index >= "1950-01-01"]
+            neerslag_df["Year"] = neerslag_df.index.year
+            neerslag_df["Day_Month"] = neerslag_df.index.strftime("%m-%d")
+            print(neerslag_df.head(6))
+
+
+            hourly_dataframe["Day_Month"] = hourly_dataframe["date"].dt.strftime("%m-%d")
+            #calculating expected rain from hourly data (API)
+            neerslag_huidig = pd.DataFrame()
+            neerslag_huidig["Day_Month"] = hourly_dataframe["date"].dt.strftime("%m-%d")
+            neerslag_huidig["Expected_Rain"] = hourly_dataframe.groupby("Day_Month")["precipitation"].sum()
+            neerslag_huidig["Expected_Rain"] = neerslag_huidig["Expected_Rain"].fillna(0)
+
+            if vandaag_mmdd in neerslag_huidig["Day_Month"].values:
+                expected_rain_today = neerslag_huidig.loc[neerslag_huidig["Day_Month"] == vandaag_mmdd, "Expected_Rain"].values[0]
+
+
+            if vandaag_mmdd in neerslag_df["Day_Month"].values:
+                historical_rain_today = neerslag_df.loc[neerslag_df["Day_Month"] == vandaag_mmdd].copy()
+                historical_rain_today["Year"] = historical_rain_today.index.year
+
+                
+            df_expected_rain = pd.DataFrame({
+                "Day_Month": [vandaag_mmdd],
+                "Expected_Rain": [expected_rain_today],
+                "Jaar": [jaar]
+            })
+
+
+            print("HIER", historical_rain_today.head())
+
+
+            # Display the processed hourly data
+            print("\nNeerslag\n", neerslag_huidig) 
+
+            # Historical bars
+            fig = make_subplots(rows=1, cols=2,
+            shared_xaxes=True, 
+            shared_yaxes=True, 
+            column_widths=[1, 0.2],
+            subplot_titles=("Historische Neerslag", "Voorspelde Neerslag")
+            )
+
+            fig.add_trace(
+                go.Bar(
+                    x=historical_rain_today["Year"],
+                    y=historical_rain_today["Neerslag"],
+                    name="Historisch",
+                    marker=dict(
+                        color=historical_rain_today["Neerslag"],  
+                        colorscale=px.colors.sequential.Blues,
+                        colorbar=dict(title="Neerslag"),
+                        showscale=True
+                    )
+                ), row=1, col=1
+            )
+
+            # Predicted rainfall (salmon bar)
+            fig.add_trace(
+                go.Bar(
+                    x=df_expected_rain["Jaar"],
+                    y=df_expected_rain["Expected_Rain"],
+                    name="Voorspeld",
+                    marker=dict(
+                        color="salmon"
+                    ),
+                    showlegend=True
+                ), row=1, col=2
+            )
+
+            #trend line rainfall
+            fig.add_trace(    
+                go.Scatter(
+                    x=historical_rain_today["Year"],
+                    y=historical_rain_today["Neerslag"].expanding().mean(),
+                    mode="lines",
+                    name="Gemiddelde",
+                    line=dict(color="black", width=1, dash = "dot", shape="spline")
+                )
+            )
+
+            fig.add_hline(
+                y = historical_rain_today["Neerslag"].mean(),
+                line=dict(color="black", width=1, dash = "dot"),
+                annotation_text = "Gemiddelde",
+                annotation_position = "top right",
+                row=1, col=2
+            )
+            # Highlight tick label for the current year
+            fig.update_layout(
+                xaxis=dict(
+                    tickangle=90,   
+                    tickfont=dict(color="black"),  # default color
+                ),
+                yaxis_title="Neerslag (mm)",
+                xaxis_title="Jaar",
+                legend_title="Legenda",
+            
+            )
+
+            fig.add_annotation(
+                x=0.00,                   # x-position (can be axis value or fraction with xref)
+                y=1.3,    
+                xref = "paper",
+                yref = "paper",               # y-position (can be axis value or fraction with yref)
+                text="Vandaag: " + vandaag_mmdd, # Text to display
+                showarrow=False,         # Show arrow pointing to the point
+                font=dict(size=25)       # Font size
+            )
+            # Make the tick label for the prediction year red
+            fig.update_xaxes(
+                tickvals=historical_rain_today.loc[
+                    historical_rain_today["Neerslag"] > 10, "Year"
+                ].unique().tolist() + [df_expected_rain["Jaar"].iloc[0]],
+                ticktext=historical_rain_today.loc[
+                    historical_rain_today["Neerslag"] > 10, "Year"
+                ].astype(str).tolist(),
+                tickangle=90  # optional: rotate for readability
+            )
+
+
+            #moving legend outside plot area
+            fig.update_traces(
+                selector=dict(name="Historisch"),
+                marker_color=historical_rain_today["Neerslag"],  # numeric
+                marker_colorscale=px.colors.sequential.Blues,
+                marker_colorbar=dict(
+                    title="Neerslag (mm)",
+                    x=1.02,          # horizontal position (right of plot)
+                    y=0.2,          # vertical position (center)
+                    len=0.8,        # length of the colorbar
+                )
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+#endregion
+
+st.divider()
+st.caption("Data provided by Open-Meteo API")
+           
 # ---------------------------------------- End
