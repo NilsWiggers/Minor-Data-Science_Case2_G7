@@ -287,7 +287,7 @@ if pagina == "Het Weer":
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-
+        import numpy as np
         # --- Uurverwachting ---
         if "Uurverwachting" in gekozen_opties:
             with col2:
@@ -297,9 +297,54 @@ if pagina == "Het Weer":
                 if not df_hourly.empty:
                     start_idx = int(nu.strftime("%H"))
                     eind_idx = start_idx + uren
-                    df_subset = df_hourly.iloc[start_idx:eind_idx][['Weer emoji', 'Temperatuur (°C)', 'Neerslag (mm)','Wind pijl','Wind richting','Wind snelheid (km/h)']]
-                    df_subset.index = [f"{(start_idx+i)%24}:00 ({(start_idx+i)//24+1})" for i in range(len(df_subset))]
-                    st.write(df_subset.T.astype(str))
+                    df_subset = df_hourly.iloc[start_idx:eind_idx]
+
+                    st.subheader(f"Het weer per uur voor de komende {uren} uur in De Bilt")
+
+                    # Paginering instellen: bv 12 uur per "pagina"
+                    pagina_grootte = 8
+                    totaal_paginas = (len(df_subset) + pagina_grootte - 1) // pagina_grootte
+
+                    # Session state voor huidige pagina
+                    if 'pagina' not in st.session_state:
+                        st.session_state.pagina = 0
+
+                    # Knoppen Vorige / Volgende
+                    col_prev, col_next = st.columns(2)
+                    with col_prev:
+                        if st.button("⬅️ Vorige") and st.session_state.pagina > 0:
+                            st.session_state.pagina -= 1
+                    with col_next:
+                        if st.button("Volgende ➡️") and st.session_state.pagina < totaal_paginas - 1:
+                            st.session_state.pagina += 1
+
+                    # Selecteer subset voor huidige pagina
+                    begin = st.session_state.pagina * pagina_grootte
+                    eind = begin + pagina_grootte
+                    df_page = df_subset.iloc[begin:eind]
+
+                    # Toon per uur in rijtjes van 4 kolommen
+                    for i in range(0, len(df_page), 8):
+                        cols = st.columns(8)
+                        for j, (idx, row) in enumerate(df_page.iloc[i:i+8].iterrows()):
+                            tijd = pd.to_datetime(row["Tijd"]).strftime("%H:%M")
+                            with cols[j]:
+                                st.markdown(f"""
+                                <div style="text-align:center; border:1px solid #ddd; border-radius:10px; padding:10px; margin:5px">
+                                    <h4>{tijd}</h4>
+                                    <div style="font-size:40px;">{row['Weer emoji']}</div>
+                                    <b>{row['Temperatuur (°C)']}°C</b><br>
+                                     {row['Wind snelheid (km/h)']} km/h </b><br> 
+                                     {row['Wind pijl']} ({row['Wind richting']})</b><br>
+                                     {row['Neerslag (mm)']} mm</b><br>
+                                     {row['Weer tekst']}
+
+                                </div>
+                                """, unsafe_allow_html=True)
+
+                    st.caption(f"Pagina {st.session_state.pagina + 1} van {totaal_paginas}")
+
+
 
         # --- 10-daagse voorspelling ---
         if "10-daagse voorspelling" in gekozen_opties:
