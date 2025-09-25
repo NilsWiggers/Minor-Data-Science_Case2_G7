@@ -18,6 +18,7 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 
 # ---------------------------------------- End
+st.set_page_config(layout="wide")
 
 # -----------------------
 # Functies
