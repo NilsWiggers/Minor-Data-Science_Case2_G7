@@ -8,10 +8,15 @@ import seaborn as sns
 import requests_cache
 from retry_requests import retry
 import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
+
+
 
 # --------------- #
 # Open-meteo API  #
 # --------------- #
+
 
 # Setup the Open-Meteo API client with cache and retry on error
 cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
@@ -67,6 +72,16 @@ print("\nHourly data\n", hourly_dataframe)
 
 #Figure code here
 
+#local rainfall data "schellingwoude"
+neerslag_df = pd.read_csv("CSV_SCHELLINGWOUDE.csv", sep=";")
+neerslag_df["Datum"] = pd.to_datetime(neerslag_df["Datum"], format = "%Y%m%d")
+neerslag_df = neerslag_df.rename(columns={"Column2":"Neerslag"})
+neerslag_df.set_index("Datum", inplace=True)
+neerslag_df.head(20)
+
+
+
+
 # ---------------------------------------- End
 
 # --------------- #
@@ -78,7 +93,7 @@ st.title("KNMI Weerdata")
 st.sidebar.header("Location & Settings")
 latitude = st.sidebar.number_input("Latitude", value=52.52, format="%.4f")
 longitude = st.sidebar.number_input("Longitude", value=13.41, format="%.4f")
-timezone = st.sidebar.text_input("Timezone", "Europe/Berlin")
+timezone = st.sidebar.text_input("Timezone", "Europe/Berlin") 
 
 st.dataframe(hourly_dataframe)
 
@@ -86,3 +101,4 @@ st.write("This is a test")
 st.write("GODOOODOAOGAGOA")
 
 # ---------------------------------------- End
+
